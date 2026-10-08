@@ -27,7 +27,7 @@ if ($Action -eq "Enable") {
       if ($p.ProcessName -ne [string]$item.Name) { continue }
       $ticks = Get-StartTicks $p
       if ($item.StartTicks -and $ticks -and $ticks -ne [int64]$item.StartTicks) { continue }
-      $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$($item.Priority)
+      $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]([Enum]::Parse([System.Diagnostics.ProcessPriorityClass], [string]$item.Priority))
     } catch { }
   }
   Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
