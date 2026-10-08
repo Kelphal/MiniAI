@@ -22,13 +22,17 @@ def main():
     except Exception as exc:
         raise RuntimeError("Install a compatible local PyTorch and Diffusers runtime: " + str(exc))
     has_cuda = torch.cuda.is_available()
-    if not has_cuda and a.memory_budget_mb < 96 * 1024:
-        raise RuntimeError("Safe stop: full FLUX.2-dev is a 32-billion-parameter model and is not practical in this CPU-only RAM budget. MiniAI will not risk exhausting Windows memory. Use a supported quantized GPU configuration or a smaller local image model.")
+    quantized = "4bit" in str(model).lower() or any((model / name).exists() for name in ("quantization_config.json", "transformer/quantization_config.json"))
+    if not quantized and a.memory_budget_mb < 96 * 1024:
+        raise RuntimeError("Safe stop: the installed FLUX.2-dev model is not identified as quantized and this worker requires a very large physical-RAM budget to load it safely. MiniAI will not risk exhausting Windows memory.")
+    if quantized and a.memory_budget_mb < 24 * 1024:
+        raise RuntimeError("Safe stop: the detected quantized FLUX.2-dev path still needs at least 24 GiB of available physical-RAM budget for this offline worker.")
     if has_cuda:
         free_vram, total_vram = torch.cuda.mem_get_info()
-        # Avoid trying to load the unquantized 32B model onto a consumer GPU.
         if free_vram < 24 * 1024**3:
             raise RuntimeError("Safe stop: less than 24 GiB of free GPU VRAM is available. This worker does not yet support the remote text encoder or every quantized FLUX.2-dev layout.")
+    elif quantized:
+        raise RuntimeError("Safe stop: this worker currently requires a compatible CUDA GPU for the quantized FLUX.2-dev path.")
     dtype = torch.bfloat16 if has_cuda and torch.cuda.is_bf16_supported() else torch.float16
     # Local-only loading prevents an offline generation request from downloading model files.
     pipe = Flux2Pipeline.from_pretrained(str(model), torch_dtype=dtype, local_files_only=True)
