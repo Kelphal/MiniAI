@@ -74,9 +74,9 @@ try{
  $root=if($driveLetter -eq 'C'){Join-Path $env:LOCALAPPDATA 'MiniAI'}else{$Requested}
  Log "Requested path: [$Requested]"; Log "Resolved install root: [$root]"
  New-Item -ItemType Directory -Force -Path $root | Out-Null
- foreach($d in 'Models','Runtime','Knowledge','Conversations','Training','Training\Manual Learnings','Training\Auto Learnings','Plugins','Logs','Math','Files'){New-Item -ItemType Directory -Force -Path (Join-Path $root $d)|Out-Null}
+ foreach($d in 'Models','Runtime','Runtime\Flux','Knowledge','Conversations','Training','Training\Manual Learnings','Training\Auto Learnings','Plugins','Logs','Math','Files'){New-Item -ItemType Directory -Force -Path (Join-Path $root $d)|Out-Null}
  $psDrive=Get-PSDrive -Name $driveLetter -ErrorAction Stop; if($psDrive.Free -lt 7GB){throw 'The selected drive needs at least 7 GB free for Chat AI and Image AI.'}
- foreach($f in 'MiniAI.exe','config.json','README.txt','SAFETY_CORE.md','STABILITY.md','FILE_WORKSPACE.md','Plugin_Developer_Guide.md'){$src=Join-Path $ScriptRoot $f;if(-not(Test-Path -LiteralPath $src)){throw "Installer file is missing: $f"};Copy-Item -LiteralPath $src -Destination (Join-Path $root $f)-Force}
+ foreach($f in 'MiniAI.exe','config.json','README.txt','SAFETY_CORE.md','STABILITY.md','FILE_WORKSPACE.md','Plugin_Developer_Guide.md','Runtime\Flux\flux_worker.py'){$src=Join-Path $ScriptRoot $f;if(-not(Test-Path -LiteralPath $src)){throw "Installer file is missing: $f"};Copy-Item -LiteralPath $src -Destination (Join-Path $root $f)-Force}
  Write-State 5 'Base files copied.'
  $runtimeExe=Join-Path $root 'Runtime\llama-server.exe'
  if(Test-Path -LiteralPath $runtimeExe){Log "Existing llama.cpp runtime found at [$runtimeExe]. Skipping runtime download.";Write-State 22 'Existing llama.cpp runtime found.'}
@@ -110,7 +110,8 @@ else{
   Download-File $modelUrl $target 'Chat AI model:' 30 48
   $modelPath=$target
 }
-# Image Search uses internet sources directly; no local diffusion runtime/model is installed.
+# FLUX.2-dev model weights and Python dependencies remain optional and are not downloaded by the base installer.
+# If a worker is present in the package, it is copied into Runtime\Flux; otherwise the UI reports it as missing.
 Write-State 99 'Writing MiniAI configuration...'
 $cfg=[ordered]@{
   install_dir=$root
@@ -120,6 +121,7 @@ $cfg=[ordered]@{
   max_tokens=384
   temperature=0.7
   context_size=2048
+  flux_model_path='Models\Flux2'
   auto_learn=$true
   full_auto=$false
 }
