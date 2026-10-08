@@ -15,8 +15,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/Runtime/Flux | Out-Null
+          New-Item -ItemType Directory -Force -Path dist/Runtime/Optimizer | Out-Null
           go build -trimpath -ldflags "-s -w" -o dist/MiniAI.exe .
           Copy-Item Runtime/Flux/flux_worker.py dist/Runtime/Flux/flux_worker.py
+          Copy-Item Runtime/Optimizer/optimizer.ps1 dist/Runtime/Optimizer/optimizer.ps1
           Copy-Item README_v5.md dist/README_v5.md
           Compress-Archive -Path dist/* -DestinationPath MiniAI-v5.0-dev-windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
