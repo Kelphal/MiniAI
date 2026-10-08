@@ -74,11 +74,13 @@ try{
  $root=if($driveLetter -eq 'C'){Join-Path $env:LOCALAPPDATA 'MiniAI'}else{$Requested}
  Log "Requested path: [$Requested]"; Log "Resolved install root: [$root]"
  New-Item -ItemType Directory -Force -Path $root | Out-Null
- foreach($d in 'Models','Runtime','Runtime\Flux','Knowledge','Conversations','Training','Training\Manual Learnings','Training\Auto Learnings','Plugins','Logs','Math','Files'){New-Item -ItemType Directory -Force -Path (Join-Path $root $d)|Out-Null}
+ foreach($d in 'Models','Runtime','Runtime\Flux','Runtime\Optimizer','Knowledge','Conversations','Training','Training\Manual Learnings','Training\Auto Learnings','Plugins','Logs','Math','Files'){New-Item -ItemType Directory -Force -Path (Join-Path $root $d)|Out-Null}
  $psDrive=Get-PSDrive -Name $driveLetter -ErrorAction Stop; if($psDrive.Free -lt 7GB){throw 'The selected drive needs at least 7 GB free for Chat AI and Image AI.'}
  foreach($f in 'MiniAI.exe','config.json','README.txt','SAFETY_CORE.md','STABILITY.md','FILE_WORKSPACE.md','Plugin_Developer_Guide.md'){$src=Join-Path $ScriptRoot $f;if(-not(Test-Path -LiteralPath $src)){throw "Installer file is missing: $f"};Copy-Item -LiteralPath $src -Destination (Join-Path $root $f)-Force}
  $fluxWorkerSource=Join-Path $ScriptRoot 'Runtime\Flux\flux_worker.py'
  if(Test-Path -LiteralPath $fluxWorkerSource){Copy-Item -LiteralPath $fluxWorkerSource -Destination (Join-Path $root 'Runtime\Flux\flux_worker.py') -Force;Log 'Optional FLUX worker copied.'}else{Log 'FLUX worker is not in this package; Image Generator will report that it is unavailable.'}
+ $optimizerSource=Join-Path $ScriptRoot 'Runtime\Optimizer\optimizer.ps1'
+ if(Test-Path -LiteralPath $optimizerSource){Copy-Item -LiteralPath $optimizerSource -Destination (Join-Path $root 'Runtime\Optimizer\optimizer.ps1') -Force;Log 'Optional safe optimizer copied.'}else{Log 'Safe optimizer script is not in this package; generation will continue without process optimization.'}
  Write-State 5 'Base files copied.'
  $runtimeExe=Join-Path $root 'Runtime\llama-server.exe'
  if(Test-Path -LiteralPath $runtimeExe){Log "Existing llama.cpp runtime found at [$runtimeExe]. Skipping runtime download.";Write-State 22 'Existing llama.cpp runtime found.'}
