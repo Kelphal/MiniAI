@@ -141,6 +141,7 @@ func persistConfig() error {
 		relModel = r
 	}
 	relImage := cfg.ImageModelPath
+	relFlux := cfg.FluxModelPath
 	if r, e := filepath.Rel(root, cfg.ImageModelPath); e == nil && !strings.HasPrefix(r, ".."+string(os.PathSeparator)) && r != ".." {
 		relImage = r
 	}
@@ -148,6 +149,8 @@ func persistConfig() error {
 	out.InstallDir = root
 	out.ModelPath = relModel
 	out.ImageModelPath = relImage
+	if r, e := filepath.Rel(root, cfg.FluxModelPath); e == nil && !strings.HasPrefix(r, ".."+string(os.PathSeparator)) && r != ".." { relFlux = r }
+	out.FluxModelPath = relFlux
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err
