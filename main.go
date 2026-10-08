@@ -38,6 +38,7 @@ type Config struct {
 	Temperature    float64 `json:"temperature"`
 	ContextSize    int     `json:"context_size"`
 	ImageModelPath string  `json:"image_model_path"`
+	FluxModelPath string `json:"flux_model_path"`
 	AutoLearn      bool    `json:"auto_learn"`
 	FullAuto       bool    `json:"full_auto"`
 }
@@ -116,6 +117,11 @@ func loadConfig() {
 	}
 	if cfg.ContextSize > 2048 {
 		cfg.ContextSize = 2048
+	}
+	if cfg.FluxModelPath == "" {
+		cfg.FluxModelPath = filepath.Join(root, "Models", "Flux2")
+	} else if !filepath.IsAbs(cfg.FluxModelPath) {
+		cfg.FluxModelPath = filepath.Join(cfg.InstallDir, cfg.FluxModelPath)
 	}
 	if cfg.ImageModelPath == "" {
 		cfg.ImageModelPath = filepath.Join(root, "Models", "Image", "stable-diffusion-v2-1-turbo-Q4_0.gguf")
@@ -1084,106 +1090,43 @@ func serveGeneratedImage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func adaptiveMemoryBudgetMB() uint64 {
+	available := availableMemoryBytes(); const reserve = uint64(2) * 1024 * 1024 * 1024
+	if available <= reserve { return 0 }; return (available - reserve) / (1024 * 1024)
+}
+func systemStatusAPI(w http.ResponseWriter, r *http.Request) {
+	available := availableMemoryBytes(); const reserve = uint64(2) * 1024 * 1024 * 1024; budget := uint64(0); if available > reserve { budget = available - reserve }
+	respondJSON(w, map[string]any{"available_physical_bytes":available,"reserve_bytes":reserve,"miniai_budget_bytes":budget,"available_physical_mb":available/(1024*1024),"miniai_budget_mb":budget/(1024*1024),"reserve_mb":reserve/(1024*1024),"mode":"adaptive-offline","note":"Budget uses currently available physical RAM, not pagefile capacity. GPU VRAM is separate."})
+}
+
 func imageEnginePath() string {
 	return filepath.Join(appDir(), "Runtime", "ImageAI", "sd-cli.exe")
 }
 
 func imageGenerate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var in struct {
-		Prompt string `json:"prompt"`
-	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&in); err != nil {
-		respondJSON(w, map[string]any{"generated": false, "message": "Invalid image-generation request."})
-		return
-	}
+	if r.Method != http.MethodPost { http.Error(w, "POST required", http.StatusMethodNotAllowed); return }
+	var in struct { Prompt string; Width int; Height int; Steps int }
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&in); err != nil { respondJSON(w, map[string]any{"generated":false,"message":"Invalid image-generation request."}); return }
 	prompt := strings.TrimSpace(in.Prompt)
-	if prompt == "" {
-		respondJSON(w, map[string]any{"generated": false, "message": "Describe the image you want to generate."})
-		return
-	}
-	if blocked(prompt) {
-		respondJSON(w, map[string]any{"generated": false, "blocked": true, "message": "MiniAI cannot generate sexual content involving anyone under 18."})
-		return
-	}
-	if _, err := os.Stat(cfg.ImageModelPath); err != nil {
-		respondJSON(w, map[string]any{"generated": false, "message": "The separate Image AI model is not installed. Re-run the MiniAI installer to install Image Generation."})
-		return
-	}
-	engine := imageEnginePath()
-	if _, err := os.Stat(engine); err != nil {
-		respondJSON(w, map[string]any{"generated": false, "message": "The separate Image AI runtime is not installed. Re-run the MiniAI installer."})
-		return
-	}
-
-	imageMu.Lock()
-	defer imageMu.Unlock()
-	modelMu.Lock()
-	defer modelMu.Unlock()
-
-	// With 8 GB RAM, never keep both neural engines resident. Stop Chat AI first,
-	// run the separate diffusion process, then restore Chat AI when generation ends.
-	stopServer()
-	defer func() {
-		if err := startServer(); err != nil {
-			_ = os.WriteFile(filepath.Join(appDir(), "Logs", "image-restart-error.log"), []byte(time.Now().Format(time.RFC3339)+" "+err.Error()+"\n"), 0644)
-		}
-	}()
-
-	name := fmt.Sprintf("generated-%d.png", time.Now().UnixNano())
-	outPath := filepath.Join(generatedImageDir(), name)
-	logPath := filepath.Join(appDir(), "Logs", "image-ai.log")
-	_ = os.MkdirAll(filepath.Dir(logPath), 0755)
-	logFile, _ := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if logFile != nil {
-		defer logFile.Close()
-	}
-
-	threads := runtime.NumCPU()
-	if threads > 6 {
-		threads = 6
-	}
-	if threads < 2 {
-		threads = 2
-	}
-	args := []string{
-		"-m", cfg.ImageModelPath,
-		"-p", prompt,
-		"-W", "512", "-H", "512",
-		"--steps", "1",
-		"--cfg-scale", "1",
-		"--sampling-method", "euler",
-		"--seed", "-1",
-		"--threads", fmt.Sprint(threads),
-		"-o", outPath,
-	}
-	cmd := exec.Command(engine, args...)
-	cmd.Dir = filepath.Dir(engine)
-	if logFile != nil {
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
-	}
-	start := time.Now()
-	if err := cmd.Run(); err != nil {
-		_ = os.Remove(outPath)
-		respondJSON(w, map[string]any{"generated": false, "message": fmt.Sprintf("Image AI failed: %v. See Logs\\image-ai.log.", err)})
-		return
-	}
-	if _, err := os.Stat(outPath); err != nil {
-		respondJSON(w, map[string]any{"generated": false, "message": "Image AI finished without producing an image. See Logs\\image-ai.log."})
-		return
-	}
-	respondJSON(w, map[string]any{
-		"generated": true,
-		"name":      name,
-		"image":     "/api/images/generated?name=" + url.QueryEscape(name),
-		"message":   fmt.Sprintf("Image generated by the separate local Image AI in %s.", time.Since(start).Round(time.Second)),
-	})
+	if prompt == "" { respondJSON(w, map[string]any{"generated":false,"message":"Describe the image you want to generate."}); return }
+	if blocked(prompt) { respondJSON(w, map[string]any{"generated":false,"blocked":true,"message":"MiniAI cannot generate sexual content involving anyone under 18."}); return }
+	modelDir := cfg.FluxModelPath
+	if st, err := os.Stat(modelDir); err != nil || !st.IsDir() { respondJSON(w, map[string]any{"generated":false,"message":"FLUX.2-dev is not installed locally yet. Place the complete Diffusers model files in Models\\Flux2. Downloads are disabled during generation."}); return }
+	worker := filepath.Join(appDir(), "Runtime", "Flux", "flux_worker.py")
+	if _, err := os.Stat(worker); err != nil { respondJSON(w, map[string]any{"generated":false,"message":"The bundled FLUX worker is missing. Restore Runtime\\Flux\\flux_worker.py."}); return }
+	python := filepath.Join(appDir(), "Runtime", "Flux", "python.exe"); if _, err := os.Stat(python); err != nil { python = "python" }
+	if in.Width < 256 || in.Width > 1024 { in.Width = 512 }; if in.Height < 256 || in.Height > 1024 { in.Height = 512 }
+	in.Width = (in.Width/64)*64; in.Height = (in.Height/64)*64; if in.Steps < 1 || in.Steps > 30 { in.Steps = 4 }
+	imageMu.Lock(); defer imageMu.Unlock()
+	name := fmt.Sprintf("generated-%d.png", time.Now().UnixNano()); outPath := filepath.Join(generatedImageDir(), name); _ = os.MkdirAll(filepath.Dir(outPath), 0755)
+	args := []string{worker, "--model", modelDir, "--prompt", prompt, "--output", outPath, "--width", fmt.Sprint(in.Width), "--height", fmt.Sprint(in.Height), "--steps", fmt.Sprint(in.Steps), "--memory-budget-mb", fmt.Sprint(adaptiveMemoryBudgetMB())}
+	cmd := exec.Command(python, args...); cmd.Dir = appDir()
+	logPath := filepath.Join(appDir(), "Logs", "flux-image-ai.log"); _ = os.MkdirAll(filepath.Dir(logPath), 0755); logFile, _ := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if logFile != nil { defer logFile.Close(); cmd.Stdout = logFile; cmd.Stderr = logFile }
+	start := time.Now(); if err := cmd.Run(); err != nil { _ = os.Remove(outPath); respondJSON(w, map[string]any{"generated":false,"message":fmt.Sprintf("FLUX.2-dev failed: %v. See Logs\\flux-image-ai.log.",err)}); return }
+	if st, err := os.Stat(outPath); err != nil || st.Size() == 0 { respondJSON(w, map[string]any{"generated":false,"message":"FLUX worker exited without producing an image. See Logs\\flux-image-ai.log."}); return }
+	respondJSON(w, map[string]any{"generated":true,"name":name,"image":"/api/images/generated?name="+url.QueryEscape(name),"message":fmt.Sprintf("Generated locally with FLUX.2-dev in %s.",time.Since(start).Round(time.Second))})
 }
-
 func serveImage(w http.ResponseWriter, r *http.Request) {
 	name := safeFileName(r.URL.Query().Get("name"))
 	p := filepath.Join(imageDir(), name)
@@ -2454,6 +2397,7 @@ func main() {
 	mux.HandleFunc("/api/images/uploaded", serveUploadedImage)
 	mux.HandleFunc("/api/images/generated", serveGeneratedImage)
 	mux.HandleFunc("/api/images/generate", imageGenerate)
+	mux.HandleFunc("/api/system/status", systemStatusAPI)
 	mux.HandleFunc("/api/teach", teach)
 	mux.HandleFunc("/api/teach/status", teachStatusAPI)
 	mux.HandleFunc("/api/lessons", lessons)
