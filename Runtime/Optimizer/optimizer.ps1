@@ -16,7 +16,7 @@ if ($Action -eq "Enable") {
   }
   $dir = Split-Path -Parent $StateFile
   if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-  $snapshot | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $StateFile -Encoding UTF8
+  if ($snapshot.Count -eq 0) { "[]" | Set-Content -LiteralPath $StateFile -Encoding UTF8 } else { $snapshot | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $StateFile -Encoding UTF8 }
   Write-Output ("Temporary safe optimization applied to {0} eligible background process(es)." -f $snapshot.Count)
 } else {
   if (-not (Test-Path -LiteralPath $StateFile)) { Write-Output "No optimizer snapshot exists; nothing to restore."; exit 0 }
