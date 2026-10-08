@@ -12,9 +12,10 @@ This branch is being developed from the existing v4.11.1 release package rather 
 ## Important: development build, not a finished release
 - FLUX.2-dev weights and a compatible Python/PyTorch/Diffusers runtime are not bundled here yet.
 - The worker expects a local Diffusers model directory at `Models/Flux2`. The model must be installed in advance.
-- FLUX.2-dev is a very large model. On a machine with 6.3 GB physical RAM, CPU-only generation may be impractical; actual feasibility depends heavily on GPU/VRAM, quantization, and the installed runtime. The 2 GiB reserve helps avoid exhausting physical RAM but cannot make an oversized model fit.
+- FLUX.2-dev is a 32-billion-parameter model. On a machine with 6.3 GB physical RAM, the current worker intentionally refuses CPU-only generation instead of risking Windows memory exhaustion. A compatible quantized local checkpoint and substantial GPU VRAM are needed for a more practical path.
 - The optional image-learning/reference collection is separate from FLUX's model weights. It can support retrieval and reference guidance; storing images does not retrain FLUX.
-- The safety-first process optimizer, optional visual-data installer, and faster idempotent v5 installer still need implementation and validation before this should be called a complete v5.0 release.
+- A conservative, reversible process optimizer now lowers priority only for a short allowlist of known noncritical background apps during generation, snapshots their process IDs/start times/original priorities, and restores them afterward. It does not kill processes. It still needs Windows runtime testing.
+- The optional visual-data installer and final faster/idempotent v5 installer are not implemented yet. The current workflow builds a development ZIP, not the final self-contained installer.
 
 ## Build
 The repository now includes a Windows x64 build workflow. You can also build with a Windows Go toolchain using `go build -o MiniAI.exe .`. Test in a separate directory and back up existing MiniAI data before trying a development build.
