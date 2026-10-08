@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless, offline FLUX.2-dev worker controlled by MiniAI."""
-import argparse, os, sys, traceback
+import argparse, json, os, sys, traceback
 from pathlib import Path
 
 def main():
@@ -23,6 +23,14 @@ def main():
         raise RuntimeError("Install a compatible local PyTorch and Diffusers runtime: " + str(exc))
     has_cuda = torch.cuda.is_available()
     quantized = "4bit" in str(model).lower() or any((model / name).exists() for name in ("quantization_config.json", "transformer/quantization_config.json"))
+    for config_path in (model / "config.json", model / "transformer" / "config.json"):
+        try:
+            with config_path.open("r", encoding="utf-8") as handle:
+                config_data = json.load(handle)
+            if config_data.get("quantization_config") or config_data.get("quantization"):
+                quantized = True
+        except (OSError, ValueError):
+            pass
     if not quantized and a.memory_budget_mb < 96 * 1024:
         raise RuntimeError("Safe stop: the installed FLUX.2-dev model is not identified as quantized and this worker requires a very large physical-RAM budget to load it safely. MiniAI will not risk exhausting Windows memory.")
     if quantized and a.memory_budget_mb < 24 * 1024:
