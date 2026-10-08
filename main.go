@@ -64,6 +64,7 @@ type TeachingStatus struct {
 var teachStatus = TeachingStatus{Phase: "Idle", Message: "Nothing is being taught."}
 
 var imageMu sync.Mutex
+var optimizerMu sync.Mutex
 
 func appDir() string {
 	if v := os.Getenv("MINIAI_HOME"); v != "" {
@@ -1093,6 +1094,19 @@ func serveGeneratedImage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func runSystemOptimizer(action string) error {
+	if action != "Enable" && action != "Restore" { return fmt.Errorf("unsupported optimizer action") }
+	script := filepath.Join(appDir(), "Runtime", "Optimizer", "optimizer.ps1")
+	if _, err := os.Stat(script); err != nil { return fmt.Errorf("safe optimizer script is not installed") }
+	state := filepath.Join(appDir(), "Logs", "system-optimizer-state.json")
+	cmd := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Action", action, "-StateFile", state)
+	cmd.Dir = appDir()
+	output, err := cmd.CombinedOutput()
+	if err != nil { return fmt.Errorf("optimizer %s failed: %v: %s", action, err, strings.TrimSpace(string(output))) }
+	settingsLog("SYSTEM OPTIMIZER %s: %s", strings.ToUpper(action), strings.TrimSpace(string(output)))
+	return nil
+}
+
 func adaptiveMemoryBudgetMB() uint64 {
 	available := availableMemoryBytes(); const reserve = uint64(2) * 1024 * 1024 * 1024
 	if available <= reserve { return 0 }; return (available - reserve) / (1024 * 1024)
@@ -1121,6 +1135,9 @@ func imageGenerate(w http.ResponseWriter, r *http.Request) {
 	if in.Width < 256 || in.Width > 1024 { in.Width = 512 }; if in.Height < 256 || in.Height > 1024 { in.Height = 512 }
 	in.Width = (in.Width/64)*64; in.Height = (in.Height/64)*64; if in.Steps < 1 || in.Steps > 30 { in.Steps = 4 }
 	imageMu.Lock(); defer imageMu.Unlock()
+	optimizerMu.Lock()
+	if err := runSystemOptimizer("Enable"); err != nil { settingsLog("SAFE OPTIMIZER SKIPPED: %v", err) } else { defer func(){ if err := runSystemOptimizer("Restore"); err != nil { settingsLog("SAFE OPTIMIZER RESTORE ERROR: %v", err) }; optimizerMu.Unlock() }() }
+	if !strings.Contains(strings.TrimSpace(""), "never") { /* generation continues even if the optional optimizer is unavailable */ }
 	name := fmt.Sprintf("generated-%d.png", time.Now().UnixNano()); outPath := filepath.Join(generatedImageDir(), name); _ = os.MkdirAll(filepath.Dir(outPath), 0755)
 	args := []string{worker, "--model", modelDir, "--prompt", prompt, "--output", outPath, "--width", fmt.Sprint(in.Width), "--height", fmt.Sprint(in.Height), "--steps", fmt.Sprint(in.Steps), "--memory-budget-mb", fmt.Sprint(adaptiveMemoryBudgetMB())}
 	cmd := exec.Command(python, args...); cmd.Dir = appDir()
