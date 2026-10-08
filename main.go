@@ -1136,8 +1136,9 @@ func imageGenerate(w http.ResponseWriter, r *http.Request) {
 	in.Width = (in.Width/64)*64; in.Height = (in.Height/64)*64; if in.Steps < 1 || in.Steps > 30 { in.Steps = 4 }
 	imageMu.Lock(); defer imageMu.Unlock()
 	optimizerMu.Lock()
-	if err := runSystemOptimizer("Enable"); err != nil { settingsLog("SAFE OPTIMIZER SKIPPED: %v", err) } else { defer func(){ if err := runSystemOptimizer("Restore"); err != nil { settingsLog("SAFE OPTIMIZER RESTORE ERROR: %v", err) }; optimizerMu.Unlock() }() }
-	if !strings.Contains(strings.TrimSpace(""), "never") { /* generation continues even if the optional optimizer is unavailable */ }
+	optimized := false
+	if err := runSystemOptimizer("Enable"); err != nil { settingsLog("SAFE OPTIMIZER SKIPPED: %v", err) } else { optimized = true }
+	defer func() { if optimized { if err := runSystemOptimizer("Restore"); err != nil { settingsLog("SAFE OPTIMIZER RESTORE ERROR: %v", err) } }; optimizerMu.Unlock() }()
 	name := fmt.Sprintf("generated-%d.png", time.Now().UnixNano()); outPath := filepath.Join(generatedImageDir(), name); _ = os.MkdirAll(filepath.Dir(outPath), 0755)
 	args := []string{worker, "--model", modelDir, "--prompt", prompt, "--output", outPath, "--width", fmt.Sprint(in.Width), "--height", fmt.Sprint(in.Height), "--steps", fmt.Sprint(in.Steps), "--memory-budget-mb", fmt.Sprint(adaptiveMemoryBudgetMB())}
 	cmd := exec.Command(python, args...); cmd.Dir = appDir()
