@@ -40,15 +40,15 @@ $Self=$env:MINIAI_SELF
 $installerDrive = if (![string]::IsNullOrWhiteSpace($Self)) { [IO.Path]::GetPathRoot($Self) } else { 'D:\' }
 if ($installerDrive -ieq 'C:\') { $script:Root = Join-Path $env:ProgramFiles 'MiniAI' } else { $script:Root = Join-Path $installerDrive 'MiniAI' }
 if (![string]::IsNullOrWhiteSpace($env:MINIAI_ROOT)) { $script:Root = [IO.Path]::GetFullPath($env:MINIAI_ROOT) }
-$cacheParent = if ($script:Root.StartsWith((Join-Path $env:ProgramFiles ''), [StringComparison]::OrdinalIgnoreCase)) { Join-Path $env:LOCALAPPDATA 'MiniAI' } else { Split-Path -Parent $script:Root }
+$cacheParent = if ([IO.Path]::GetPathRoot($script:Root) -ieq 'C:\') { Join-Path $env:LOCALAPPDATA 'MiniAI_InstallerCache' } else { Split-Path -Parent $script:Root }
 $Temp=Join-Path (Join-Path $cacheParent 'MiniAI_InstallerCache') ('Session_' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Temp -Force | Out-Null
 $PayloadZip=Join-Path $Temp 'MiniAI_v5_payload.zip'
 $PayloadDir=Join-Path $Temp 'MiniAI_v5_payload'
 $Log=Join-Path $Temp 'MiniAI_Installer_v5.log'
 $Err=Join-Path $Temp 'MiniAI_Installer_v5_error.txt'
-$UpdateJson=Join-Path $env:TEMP 'MiniAI_update.json'
-$UpdateErr=Join-Path $env:TEMP 'MiniAI_update_error.txt'
+$UpdateJson=Join-Path $Temp 'MiniAI_update.json'
+$UpdateErr=Join-Path $Temp 'MiniAI_update_error.txt'
 $global:UpdateAvailable=$false
 $script:InstallStarting=$false
 $script:WorkerLaunched=$false
@@ -129,6 +129,7 @@ function Start-Install([bool]$Fresh){
       Get-Process MiniAI,MiniAI_UI,MiniAI_Core_v4,MiniAI_Flux2_Bridge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
       Start-Sleep -Milliseconds 700
       if(Test-Path -LiteralPath $script:Root){Remove-Item -LiteralPath $script:Root -Recurse -Force -ErrorAction Stop}
+      if([IO.Path]::GetPathRoot($script:Root) -ieq 'C:\'){$dataRoot=Join-Path $env:LOCALAPPDATA 'MiniAI\Data';if(Test-Path -LiteralPath $dataRoot){Remove-Item -LiteralPath $dataRoot -Recurse -Force -ErrorAction Stop}}
       New-Item -ItemType Directory -Path $script:Root -Force | Out-Null
       Log 'Fresh installation folder is ready.'
     }
@@ -153,6 +154,7 @@ function Uninstall-MiniAI{
     Get-Process MiniAI,MiniAI_UI,MiniAI_Core_v4,MiniAI_Flux2_Bridge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
     if(Test-Path -LiteralPath $script:Root){Remove-Item -LiteralPath $script:Root -Recurse -Force -ErrorAction Stop}
+    if([IO.Path]::GetPathRoot($script:Root) -ieq 'C:\'){$dataRoot=Join-Path $env:LOCALAPPDATA 'MiniAI\Data';if(Test-Path -LiteralPath $dataRoot){Remove-Item -LiteralPath $dataRoot -Recurse -Force -ErrorAction Stop}}
     Log 'MiniAI installation folder removed.'
     $freshButton.Visible=$false; $uninstallButton.Visible=$false
   }
@@ -162,7 +164,7 @@ function Update-Installer{
 }
 function More-Details{
   try{
-    $report=Join-Path $env:TEMP 'MiniAI_v5_diagnostics.txt'
+    $report=Join-Path (Split-Path -Parent $Log) 'MiniAI_v5_diagnostics.txt'
     $parts=New-Object System.Collections.Generic.List[string]
     $parts.Add('MiniAI v5.0.0 - Diagnostic report')
     $parts.Add(('Created: '+(Get-Date)))
@@ -192,10 +194,11 @@ function More-Details{
 }
 $form=New-Object Windows.Forms.Form;$form.Text='MiniAI Setup';$form.Size=New-Object Drawing.Size(720,560);$form.StartPosition='CenterScreen';$form.FormBorderStyle='FixedDialog';$form.MaximizeBox=$false;$form.MinimizeBox=$true;$form.BackColor=[Drawing.Color]::FromArgb(12,14,19);$form.UseWaitCursor=$false;$form.Cursor=[Windows.Forms.Cursors]::Default
 $header=New-Object Windows.Forms.Panel;$header.BackColor=[Drawing.Color]::FromArgb(8,12,20);$header.Location=New-Object Drawing.Point(0,0);$header.Size=New-Object Drawing.Size(704,92);$form.Controls.Add($header)
-$title=New-Object Windows.Forms.Label;$title.Text='Kelphal™';$title.ForeColor=[Drawing.Color]::Gold;$title.Font=New-Object Drawing.Font('Impact',22,[Drawing.FontStyle]::Bold);$title.Location=New-Object Drawing.Point(24,17);$title.AutoSize=$true;$header.Controls.Add($title)
+$header.Add_Paint({$brush=New-Object Drawing.Drawing2D.LinearGradientBrush($header.ClientRectangle,[Drawing.Color]::FromArgb(46,35,12),[Drawing.Color]::FromArgb(8,12,20),0);try{$_.Graphics.FillRectangle($brush,$header.ClientRectangle)}finally{$brush.Dispose()}})
+$title=New-Object Windows.Forms.Label;$brandFont='Impact';if([Drawing.FontFamily]::Families.Name -contains 'Titan One'){$brandFont='Titan One'};$title.Text='Kelphal™';$title.ForeColor=[Drawing.Color]::Gold;$title.Font=New-Object Drawing.Font($brandFont,22,[Drawing.FontStyle]::Bold);$title.Location=New-Object Drawing.Point(24,17);$title.AutoSize=$true;$header.Controls.Add($title)
 $sub=New-Object Windows.Forms.Label;$sub.Text='Offline AI • Chat • Image Creation';$sub.ForeColor=[Drawing.Color]::LightSteelBlue;$sub.Font=New-Object Drawing.Font('Segoe UI',10);$sub.Location=New-Object Drawing.Point(26,56);$sub.AutoSize=$true;$header.Controls.Add($sub)
 $status=New-Object Windows.Forms.Label;$status.Text='Starting...';$status.ForeColor=[Drawing.Color]::White;$status.Location=New-Object Drawing.Point(26,108);$status.Size=New-Object Drawing.Size(650,32);$form.Controls.Add($status)
-$progress=New-Object Windows.Forms.ProgressBar;$progress.Location=New-Object Drawing.Point(26,143);$progress.Size=New-Object Drawing.Size(650,24);$progress.Style='Continuous';$progress.Value=0;$progress.Visible=$false;$form.Controls.Add($progress)
+$progress=New-Object Windows.Forms.ProgressBar;$progress.Location=New-Object Drawing.Point(26,143);$progress.Size=New-Object Drawing.Size(650,24);$progress.Style='Continuous';$progress.Value=0;$progress.ForeColor=[Drawing.Color]::FromArgb(0,122,255);$progress.Visible=$false;$form.Controls.Add($progress)
 $installButton=New-Object Windows.Forms.Button;$installButton.Text='Install / Upgrade MiniAI + Image Generator';$installButton.Location=New-Object Drawing.Point(26,185);$installButton.Size=New-Object Drawing.Size(315,42);$form.Controls.Add($installButton)
 $freshButton=New-Object Windows.Forms.Button;$freshButton.Text='Fresh Install';$freshButton.Enabled=$true;$freshButton.Location=New-Object Drawing.Point(361,185);$freshButton.Size=New-Object Drawing.Size(315,42);$form.Controls.Add($freshButton)
 $uninstallButton=New-Object Windows.Forms.Button;$uninstallButton.Text='Uninstall';$uninstallButton.Enabled=$true;$uninstallButton.Location=New-Object Drawing.Point(26,237);$uninstallButton.Size=New-Object Drawing.Size(315,42);$form.Controls.Add($uninstallButton)
@@ -230,14 +233,14 @@ $form.Add_Shown({$form.Activate();$status.Text='Ready. Choose a folder and insta
 $pathLabel=New-Object Windows.Forms.Label;$pathLabel.Text='Install folder';$pathLabel.ForeColor=[Drawing.Color]::White;$pathLabel.Location=New-Object Drawing.Point(26,424);$pathLabel.Size=New-Object Drawing.Size(90,24);$form.Controls.Add($pathLabel)
 $pathBox=New-Object Windows.Forms.TextBox;$pathBox.Text=$script:Root;$pathBox.Location=New-Object Drawing.Point(116,421);$pathBox.Size=New-Object Drawing.Size(430,26);$pathBox.BackColor=[Drawing.Color]::FromArgb(24,28,36);$pathBox.ForeColor=[Drawing.Color]::White;$form.Controls.Add($pathBox)
 $browseButton=New-Object Windows.Forms.Button;$browseButton.Text='Browse';$browseButton.Location=New-Object Drawing.Point(554,419);$browseButton.Size=New-Object Drawing.Size(122,30);$form.Controls.Add($browseButton)
-$browseButton.Add_Click({$dlg=New-Object Windows.Forms.FolderBrowserDialog;$dlg.Description='Choose the folder where MiniAI should be installed.';$dlg.SelectedPath=$script:Root;if($dlg.ShowDialog() -eq 'OK'){$script:Root=[IO.Path]::GetFullPath($dlg.SelectedPath);$pathBox.Text=$script:Root}})
+$browseButton.Add_Click({$dlg=New-Object Windows.Forms.FolderBrowserDialog;$dlg.Description='Choose the folder where MiniAI should be installed.';$dlg.SelectedPath=$script:Root;if($dlg.ShowDialog() -eq 'OK'){$script:Root=[IO.Path]::GetFullPath($dlg.SelectedPath);$pathBox.Text=$script:Root;$cacheParent=if([IO.Path]::GetPathRoot($script:Root) -ieq 'C:\'){Join-Path $env:LOCALAPPDATA 'MiniAI_InstallerCache'}else{Split-Path -Parent $script:Root};$newTemp=Join-Path (Join-Path $cacheParent 'Sessions') ('Session_'+[guid]::NewGuid().ToString('N'));New-Item -ItemType Directory -Path $newTemp -Force|Out-Null;Set-Variable -Scope Script -Name Temp -Value $newTemp;Set-Variable -Scope Script -Name PayloadZip -Value (Join-Path $newTemp 'MiniAI_v5_payload.zip');Set-Variable -Scope Script -Name PayloadDir -Value (Join-Path $newTemp 'MiniAI_v5_payload');Set-Variable -Scope Script -Name Log -Value (Join-Path $newTemp 'MiniAI_Installer_v5.log');Set-Variable -Scope Script -Name Err -Value (Join-Path $newTemp 'MiniAI_Installer_v5_error.txt')}})
 $pathBox.Add_TextChanged({if(![string]::IsNullOrWhiteSpace($pathBox.Text)){$script:Root=[IO.Path]::GetFullPath($pathBox.Text)}})
 $thanks=New-Object Windows.Forms.Label;$thanks.Text='Thanks for installing MegaAI';$thanks.ForeColor=[Drawing.Color]::White;$thanks.Font=New-Object Drawing.Font('Segoe UI',8);$thanks.Location=New-Object Drawing.Point(26,475);$thanks.Size=New-Object Drawing.Size(260,20);$form.Controls.Add($thanks)
 
 [void]$form.ShowDialog()
 __MINIAI_UI_END_5F9A22__
 
-__MINIAI_PAYLOAD_BEGIN_7F3A91D2__UEsDBBQAAAAIACGJTF0oM7AlzQ0AACczAAAVAAAAVXBncmFkZV9NaW5pQUlfdjUucHMxzRrtbtvI8b+eYhPoSgkRWVmxHMeG0foz0cWy3UhJULiBQYtriXcU
+__MINIAI_PAYLOAD_BEGIN_7F3A91D2__UEsDBBQAAAAIADqJTF0oM7AlzQ0AACczAAAVAAAAVXBncmFkZV9NaW5pQUlfdjUucHMxzRrtbtvI8b+eYhPoSgkRWVmxHMeG0foz0cWy3UhJULiBQYtriXcU
 l8cPy2rOQH/0EfoEfbR7ks7MLsUlRUpMDyiaH74Td2Z2Zna+dwM7tOetBmO3URy6/vRrcxTbcRJduB5nR8wwOvrapZiuFhrtxrHjmONlwJl5HEV8fu8tr+w5
 Z6NlFPO59cX1HbGIrAsRzqMtsGehvYAdGrdluNZxEHjuxI5d4X89ODj37XuPf3ajxPZG8dLjUavdaJ6HoQiPJwhzE/IHHnJ/QoyOYhEYjeZHIWL46T6w1otU
 noODQXSVeN51+GXmxnwU2BPeanL/8WA4uBocD+4+Xl+P2232jd0Orq0bO54ByjseXwAO/lqHZc+MexEHDOPs4G9D13ePBwZ7bjTfA0Ow/QgEiU3EZfAXeIxZ
@@ -276,11 +279,11 @@ sN6j64t1ZN1720tl1VFr9Ou1AtepbN5XgPX698McuN7Cv6H+N7Ui6UPwefVop+KBz+plgvbYoSwptAwq
 1zCfUasEWSjtKXy+2PLw6ve++8o3wiVvvugJnOKj5iOxFPz/4mVY3vqyuU/ejNZjsFaElYDmQ4NWr9XtLiu7BF8Gr7IWoWWU9CLac+56vT6+qZzZEYON2D2H
 qEkXvmAJSx5rbboqEI12bgjBnothKyd8LiLgaqudw6AFREB2fED4Q8GdC86vmoNyGvg/tImT7ZyiiaBVlcfT59eS6O2jcJ2vufoVWJMPRFo0kWzLwnyyLuxD
 QUz5QWcNPL1iDpUbNm0YUW0f5hVHkTUmV9nLH9uPFrzkyUmF7aT9k4pa9DR3Im9lcXGt3XpgS5EwOXqOsTFcXTfLDhHv3OUaZ3Phu3i9bvvLhb380+8YGP2V
-R1diaxP2lwS81JV5WBvkKo1g2DOAkEGP+u6sU9uf0BUolb/bh5GZLaSmrr7gvR64G5pnvt09XH+qDHSUfT4ULLPdyLXQaO6N/wBQSwMEFAAAAAgAIYlMXdLM
+R1diaxP2lwS81JV5WBvkKo1g2DOAkEGP+u6sU9uf0BUolb/bh5GZLaSmrr7gvR64G5pnvt09XH+qDHSUfT4ULLPdyLXQaO6N/wBQSwMEFAAAAAgAOolMXdLM
 vqvjAAAAVQEAABUAAABVcGdyYWRlX01pbmlBSV92NS5jbWSlkMFKAzEQhu95iiGwVg/b7goeW1xFQVBZrPVa0mS2G0gzIZOt20uf3SwVfABPAz//zMc396h7
 Auo6wZgcaeWENrAwIIuzCZUUHhMwMlvysPKDg9vVVS1sB55SLmGMFB0e0RVyuZSVhGsBEOgbI/fo3BxHhPKdXmlP02wjddbl6GlEPaR8tSVn9QkeTkExQ/lI
 h4Pymb9OKqYy9zVO+XPealXqYVacu2oG5RfGHXwMvmGZiTjaBIsdVOJG/IO+/mwuqF//TdhHZXD7Zr1tXrbHu3ngWk76f+JQQ1ADo0BvLh/8AVBLAwQUAAAA
-CAAhiUxdHlayB9zYIgAA7FEAEwAAAE1pbmlBSV9MYXVuY2hlci5leGXsvQt4FEXWMNyTzCRDSOxBggxyCxolqGDCzQwYmUCCNTCBIBHCxRUEIihKDDMhAkJg
+CAA6iUxdHlayB9zYIgAA7FEAEwAAAE1pbmlBSV9MYXVuY2hlci5leGXsvQt4FEXWMNyTzCRDSOxBggxyCxolqGDCzQwYmUCCNTCBIBHCxRUEIihKDDMhAkJg
 EkjbjI4re3tx99N113W9sspGLoq5QELAlQAKaHYV8EIPoxJAQyDK/Oec6u6ZyQV93+/7n+d/nv9D01PVVefUqVNVp86pOlWdM9snRAuCYIS/YFAQZIH/sws/
 /68U/q4ZuPMaYVu3fw3abnD+a1De4iXLkwqLlj1YNP+RpAXzH310mSvpgUVJRe5Hk5Y8mpQ1dXrSI8sWLhqWkBCXrOLIzRaEhRvMPHJmGv00CzcI3aOAqq03
 CYIzWiUoVhAsYZRhOEoQYgQD/Md/+fuZGKF/UcK8dYKQFMofHrCE6hEWFITUGcJdprC4/V4h9bPw+AzB9/YvYE77fz1yhBJD18nDXItKXPD7rzdu4gRh3WMi
@@ -4995,6 +4998,3 @@ a2xoL/xLhFcPx2T32g3X++k+W9kMgNihmtg+Tt9BqOZTHU74F2WHqqGaCphE6BNWE4B/o4c5fUehmibY
 TBDMDwLnOxTj7FUDI7Qd72ChJMCAQT03+Y7Cx1/jx18b1dmcvc5B13D5ncW2oGkogY/smQAOdGJYdq9t2b3Ks3pVZfXyk/qH4c9mYeVSXOLqBGvWqMS1ssO3
 4AG4icgatXhtlBdvp8Jt5Kjpa2PwZsyoO9fCLjkvLPiJU9jkFLYKVcImL1mcZSl2b5ayKMqruGO8Sk4sU/WvFYgYnNSeymbevQr/u5z/fSSbhZZ/OJtFon+A
 /u7U7uF/76D3dmpT4O9a8nAFXjoLbyL4zQ14Y+U3P802sB/ZP+EzUiAoNVrf7LaHTd3DP2PN+CelPf6JiQqDf46Ewz++74d/cmH/4p7ZbeyZWN8xG6yXUYnP
-4tJD1DQqEXFPign3OEclPsVwz2J0U78zOdmMe3ZlK4dggbfFPE1Mf4/o54oQ9POdjn5oJzuV7QYKenJlCAraqq9wQEF5jxOyedKEf+55wsA/1Qz/xE1+mvDP
-U4QsVjL8k4ybGpBQGew43D2lEzxZxYCCshAFHeK7+cvxo6Je0/ceXH+CXU3E0XCpvwT8E/UU+dlfSfgHWGkEPSVLaeFo7egEz32vQp33PRfjVPb7/DCidVmj
-kl/SoR0/KvkP6AQ/Em7WA6yRE0YlL+fxQXZx/FPO8Y8d8U9CEP/cOO2HwD9nEVKoZuRNhDqUHWzaGZqwZfU6lq18puNKHaHEwF6H6wp+T6NHuMqujxr8g1Hy
