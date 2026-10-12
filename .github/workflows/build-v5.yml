@@ -2,7 +2,7 @@ name: MiniAI v5 Windows x64 installer build
 on:
   workflow_dispatch:
   push:
-    branches: [v5.0-dev]
+    branches: [v5.0-dev, v5.0.0-installer-fix]
 jobs:
   build:
     runs-on: windows-latest
