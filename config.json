@@ -1,0 +1,9 @@
+{
+  "install_dir": "",
+  "model_path": "Models\\Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "server_port": 8080,
+  "ui_port": 32123,
+  "max_tokens": 384,
+  "temperature": 0.7,
+  "context_size": 2048
+}

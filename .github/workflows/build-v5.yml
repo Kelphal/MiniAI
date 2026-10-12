@@ -1,0 +1,46 @@
+name: MiniAI v5 Windows x64 installer build
+on:
+  workflow_dispatch:
+  push:
+    branches: [v5.0-dev]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Build MiniAI and create single-file installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist/Runtime/Flux | Out-Null
+          New-Item -ItemType Directory -Force -Path dist/Runtime/Optimizer | Out-Null
+          go build -trimpath -ldflags "-s -w" -o dist/MiniAI.exe .
+          Copy-Item config.json dist/config.json
+          Copy-Item Install_MiniAI.ps1 dist/Install_MiniAI.ps1
+          Copy-Item Install_Worker.ps1 dist/Install_Worker.ps1
+          Copy-Item Runtime/Flux/flux_worker.py dist/Runtime/Flux/flux_worker.py
+          Copy-Item Runtime/Optimizer/optimizer.ps1 dist/Runtime/Optimizer/optimizer.ps1
+          Copy-Item README_v5.md dist/README_v5.md
+          Compress-Archive -Path dist/* -DestinationPath MiniAI-v5.0.0-package.zip -Force
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path MiniAI-v5.0.0-package.zip))
+          $b64 = [Convert]::ToBase64String($bytes)
+          $chunks = for ($i = 0; $i -lt $b64.Length; $i += 76) { $b64.Substring($i, [Math]::Min(76, $b64.Length - $i)) }
+          $bootstrap = @'
+          @echo off
+          setlocal
+          set "MINIAI_SELF=%~f0"
+          start "" /b powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "$ErrorActionPreference='Stop'; try { $p=$env:MINIAI_SELF; $l=[IO.File]::ReadAllLines($p); $a=[Array]::IndexOf($l,'::MINIAI_PAYLOAD_BEGIN'); $b=[Array]::IndexOf($l,'::MINIAI_PAYLOAD_END'); if($a -lt 0 -or $b -le $a){throw 'Installer package is incomplete.'}; $data=($l[($a+1)..($b-1)] -join ''); $tmp=Join-Path $env:TEMP ('MiniAISetup_'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $tmp -Force | Out-Null; $z=Join-Path $tmp 'package.zip'; [IO.File]::WriteAllBytes($z,[Convert]::FromBase64String($data)); Expand-Archive -LiteralPath $z -DestinationPath $tmp -Force; $ui=Join-Path $tmp 'Install_MiniAI.ps1'; if(!(Test-Path -LiteralPath $ui)){throw 'Installer UI is missing from the package.'}; $arg='-NoLogo -NoProfile -ExecutionPolicy Bypass -File "'+$ui+'"'; Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $arg -Wait } catch { Add-Content -LiteralPath (Join-Path $env:TEMP 'MiniAI_Installer_Error.log') -Value ('['+(Get-Date)+'] '+$_.Exception.ToString()) }"
+          exit /b 0
+          ::MINIAI_PAYLOAD_BEGIN
+          '@
+          $bootstrap = $bootstrap -replace '          ', ''
+          Add-Content -LiteralPath MiniAI_Installer_v5.0.0.cmd -Value $bootstrap -Encoding ASCII
+          Add-Content -LiteralPath MiniAI_Installer_v5.0.0.cmd -Value $chunks -Encoding ASCII
+          Add-Content -LiteralPath MiniAI_Installer_v5.0.0.cmd -Value '::MINIAI_PAYLOAD_END' -Encoding ASCII
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MiniAI-Installer-v5.0.0
+          path: MiniAI_Installer_v5.0.0.cmd
