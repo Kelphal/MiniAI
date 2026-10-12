@@ -6,45 +6,50 @@ $ErrorActionPreference = 'Stop'
 $ScriptRoot = $PSScriptRoot
 
 $form = New-Object Windows.Forms.Form
-$form.Text = 'MiniAI - Install - Kelphal - Gio A.'
-$form.Size = New-Object Drawing.Size(720,455)
+$form.Text = 'MiniAI Setup'
+$form.Size = New-Object Drawing.Size(760,500)
 $form.StartPosition = 'CenterScreen'
-$form.BackColor = [Drawing.Color]::FromArgb(14,17,21)
+$form.BackColor = [Drawing.Color]::FromArgb(8,10,15)
 $form.ForeColor = [Drawing.Color]::White
 $form.Font = New-Object Drawing.Font('Segoe UI',10)
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 
 $title = New-Object Windows.Forms.Label
-$title.Text = 'MiniAI'
+$title.Text = 'Kelphal™'
+$title.ForeColor = [Drawing.Color]::FromArgb(232,190,78)
+try { $title.Font = New-Object Drawing.Font('Titan One',24,[Drawing.FontStyle]::Regular) } catch { $title.Font = New-Object Drawing.Font('Segoe UI',24,[Drawing.FontStyle]::Bold) }
 $title.Font = New-Object Drawing.Font('Segoe UI',24,[Drawing.FontStyle]::Bold)
-$title.Location = '34,28'; $title.AutoSize = $true; $form.Controls.Add($title)
+$title.Location = '34,20'; $title.AutoSize = $true; $form.Controls.Add($title)
 $sub = New-Object Windows.Forms.Label
-$sub.Text = 'Local 4B AI - Made by Kelphal - Gio A.'
+$sub.Text = 'MiniAI  •  Local AI setup'
 $sub.ForeColor = [Drawing.Color]::LightGray
-$sub.Location = '38,75'; $sub.AutoSize = $true; $form.Controls.Add($sub)
+$sub.Location = '38,66'; $sub.AutoSize = $true; $form.Controls.Add($sub)
 $lab = New-Object Windows.Forms.Label
 $lab.Text = 'Installation folder'
-$lab.Location = '38,125'; $lab.AutoSize = $true; $form.Controls.Add($lab)
+$lab.Location = '38,116'; $lab.AutoSize = $true; $form.Controls.Add($lab)
 $box = New-Object Windows.Forms.TextBox
 $box.Text = 'D:\MiniAI'; $box.Location = '38,153'; $box.Size = '500,30'
 $box.BackColor = [Drawing.Color]::FromArgb(27,31,37); $box.ForeColor = [Drawing.Color]::White
 $form.Controls.Add($box)
 $browse = New-Object Windows.Forms.Button
-$browse.Text = 'Browse...'; $browse.Location = '548,152'; $browse.Size = '105,31'; $form.Controls.Add($browse)
+$browse.Text = 'Browse...'; $browse.Location = '548,143'; $browse.Size = '105,31'; $form.Controls.Add($browse)
 $info = New-Object Windows.Forms.Label
 $info.Text = 'C: installs to LocalAppData\MiniAI. Another drive keeps MiniAI data on that selected drive.'
-$info.Location = '38,205'; $info.Size = '610,55'; $info.ForeColor = [Drawing.Color]::Gainsboro
+$info.Location = '38,194'; $info.Size = '650,55'; $info.ForeColor = [Drawing.Color]::Gainsboro
 $form.Controls.Add($info)
 $progress = New-Object Windows.Forms.ProgressBar
-$progress.Location = '38,290'; $progress.Size = '615,20'; $progress.Style = 'Continuous'; $form.Controls.Add($progress)
+$progress.Location = '38,280'; $progress.Size = '650,20'; $progress.Style = 'Continuous'; $progress.ForeColor = [Drawing.Color]::FromArgb(40,125,255); $form.Controls.Add($progress)
 $status = New-Object Windows.Forms.Label
-$status.Text = 'Ready'; $status.Location = '38,320'; $status.Size = '615,24'; $status.ForeColor = [Drawing.Color]::Silver
+$status.Text = 'Ready'; $status.Location = '38,310'; $status.Size = '650,24'; $status.ForeColor = [Drawing.Color]::Silver
 $form.Controls.Add($status)
 $details = New-Object Windows.Forms.Button
-$details.Text = 'More Details'; $details.Location = '38,365'; $details.Size = '115,35'; $form.Controls.Add($details)
+$details.Text = 'More Details'; $details.Location = '38,365'; $details.Size = '115,35'; $details.FlatStyle = 'Flat'; $details.BackColor = [Drawing.Color]::FromArgb(20,25,34); $details.ForeColor = [Drawing.Color]::White; $form.Controls.Add($details)
 $install = New-Object Windows.Forms.Button
-$install.Text = 'Install MiniAI'; $install.Location = '535,365'; $install.Size = '118,35'; $form.Controls.Add($install)
+$install.Text = 'Install MiniAI'; $install.Location = '570,365'; $install.Size = '118,35'; $install.FlatStyle = 'Flat'; $install.BackColor = [Drawing.Color]::FromArgb(35,105,220); $install.ForeColor = [Drawing.Color]::White; $form.Controls.Add($install)
+$thanks = New-Object Windows.Forms.Label
+$thanks.Text = 'Thanks for installing MegaAI'
+$thanks.Location = '38,430'; $thanks.AutoSize = $true; $thanks.Font = New-Object Drawing.Font('Segoe UI',8); $thanks.ForeColor = [Drawing.Color]::White; $form.Controls.Add($thanks)
 
 $session = [guid]::NewGuid().ToString('N')
 $stateFile = Join-Path $env:TEMP ('MiniAIInstaller_' + $session + '.state')
@@ -84,7 +89,7 @@ function Update-Details {
 function Show-Details {
     if($detailForm -and -not $detailForm.IsDisposed){ $detailForm.Activate(); Update-Details; return }
     $detailForm = New-Object Windows.Forms.Form
-    $detailForm.Text = 'MiniAI Installer - More Details'
+    $detailForm.Text = 'MiniAI - Installation Details'
     $detailForm.Size = New-Object Drawing.Size(820,520)
     $detailForm.StartPosition = 'CenterParent'
     $detailForm.BackColor = [Drawing.Color]::FromArgb(10,12,15)
