@@ -3,7 +3,8 @@ param(
  [Parameter(Mandatory=$true)][string]$Requested,
  [Parameter(Mandatory=$true)][string]$ScriptRoot,
  [Parameter(Mandatory=$true)][string]$StateFile,
- [Parameter(Mandatory=$true)][string]$LogFile
+ [Parameter(Mandatory=$true)][string]$LogFile,
+ [switch]$FreshInstall
 )
 $ErrorActionPreference='Stop'
 try { New-Item -ItemType File -Force -Path $LogFile | Out-Null } catch { }
@@ -64,6 +65,17 @@ try{
  $driveRoot=[IO.Path]::GetPathRoot($Requested); $driveLetter=$driveRoot.Substring(0,1).ToUpperInvariant()
  $root=if($driveLetter -eq 'C'){Join-Path $env:LOCALAPPDATA 'MiniAI'}else{$Requested}
  Log "Requested path: [$Requested]"; Log "Resolved install root: [$root]"
+ if($FreshInstall){
+  Log 'Fresh install selected. Removing previous MiniAI-managed files from the selected install folder.'
+  foreach($d in 'Models','Runtime','Knowledge','Conversations','Training','Plugins','Logs','Math','Files'){
+   $p=Join-Path $root $d
+   if(Test-Path -LiteralPath $p){Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue}
+  }
+  foreach($f in 'MiniAI.exe','config.json','README.txt','README_v5.md','Start_MiniAI.cmd'){
+   $p=Join-Path $root $f
+   if(Test-Path -LiteralPath $p){Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue}
+  }
+ }
  New-Item -ItemType Directory -Force -Path $root | Out-Null
  foreach($d in 'Models','Runtime','Runtime\Flux','Runtime\Optimizer','Knowledge','Conversations','Training','Training\Manual Learnings','Training\Auto Learnings','Plugins','Logs','Math','Files'){New-Item -ItemType Directory -Force -Path (Join-Path $root $d)|Out-Null}
  $psDrive=Get-PSDrive -Name $driveLetter -ErrorAction Stop; if($psDrive.Free -lt 7GB){throw 'The selected drive needs at least 7 GB free for Chat AI and Image AI.'}
