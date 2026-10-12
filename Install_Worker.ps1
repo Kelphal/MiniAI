@@ -51,19 +51,10 @@ function Download-File([string]$Url,[string]$Out,[string]$Label,[int]$Base,[int]
  }
 }
 function Find-ExistingModel([string]$PreferredRoot,[string]$FileName){
- $candidates=New-Object System.Collections.Generic.List[string]
- $local=Join-Path (Join-Path $env:LOCALAPPDATA 'MiniAI\Models') $FileName
- [void]$candidates.Add($local)
- if($PreferredRoot){[void]$candidates.Add((Join-Path (Join-Path $PreferredRoot 'Models') $FileName))}
- foreach($drive in Get-PSDrive -PSProvider FileSystem){
-  $r=$drive.Root
-  [void]$candidates.Add((Join-Path $r ('MiniAI\Models\'+$FileName)))
-  [void]$candidates.Add((Join-Path $r ('Users\'+$env:USERNAME+'\Downloads\MiniAI\Models\'+$FileName)))
-  [void]$candidates.Add((Join-Path $r ('Users\'+$env:USERNAME+'\Downloads\MiniAI_v4.1_Debug_Package\Models\'+$FileName)))
- }
- foreach($p in $candidates | Select-Object -Unique){
-  try{ if(Test-Path -LiteralPath $p){$i=Get-Item -LiteralPath $p; if($i.Length -ge 2GB){return $i.FullName}} }catch{}
- }
+ # Use only the selected install folder. Never search unrelated drives, AppData, Downloads, or legacy debug folders.
+ if([string]::IsNullOrWhiteSpace($PreferredRoot)){return $null}
+ $candidate=Join-Path (Join-Path $PreferredRoot 'Models') $FileName
+ try{ if(Test-Path -LiteralPath $candidate){$item=Get-Item -LiteralPath $candidate; if($item.Length -ge 2GB){return $item.FullName}} }catch{}
  return $null
 }
 try{
