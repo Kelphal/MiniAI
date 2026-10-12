@@ -1,21 +1,28 @@
-# MiniAI 5.0 development branch
+# MiniAI
 
-This branch is being developed from the existing v4.11.1 release package rather than replacing the project with a fresh application.
+**MiniAI** is a Windows x64 local AI application with an integrated chat interface, image search, teaching tools, file workspace, and Image Generator.
 
-## Changes currently staged in source
-- Restores the embedded Go source and HTML UI into ordinary source files so they can be reviewed and built.
-- Adds a dedicated FLUX.2-dev Image Generator tab in the existing MiniAI UI.
-- Adds a headless local worker path controlled by MiniAI; it does not open a separate generator GUI.
-- Adds a physical-memory status endpoint and budgets currently available physical RAM minus a 2 GiB safety reserve. Pagefile capacity is not treated as physical RAM.
-- Generation is configured for local-only model loading; it will not silently download model weights while offline.
+## Installation
 
-## Important: development build, not a finished release
-- FLUX.2-dev weights and a compatible Python/PyTorch/Diffusers runtime are not bundled here yet.
-- The worker expects a local Diffusers model directory at `Models/Flux2`. The model must be installed in advance.
-- FLUX.2-dev is a 32-billion-parameter model. On a machine with 6.3 GB physical RAM, the current worker intentionally refuses CPU-only generation instead of risking Windows memory exhaustion. A compatible quantized local checkpoint and substantial GPU VRAM are needed for a more practical path.
-- The optional image-learning/reference collection is separate from FLUX's model weights. It can support retrieval and reference guidance; storing images does not retrain FLUX.
-- A conservative, reversible process optimizer now lowers priority only for a short allowlist of known noncritical background apps during generation, snapshots their process IDs/start times/original priorities, and restores them afterward. It does not kill processes. It still needs Windows runtime testing.
-- The optional visual-data installer and final faster/idempotent v5 installer are not implemented yet. The current workflow builds a development ZIP, not the final self-contained installer.
+1. Run `MiniAI_Installer_v5.0.0.cmd`.
+2. Choose the installation folder.
+3. Select **Install MiniAI** for a normal installation or **Fresh Install** to replace MiniAI-managed files in the selected folder.
+4. Keep the installer open until the progress status reports completion.
+
+The installer package contains the MiniAI application and setup scripts. The chat model is downloaded during installation. Large optional image-generation model files are not bundled into the installer.
+
+## Image Generator
+
+Image generation is integrated into the MiniAI interface and uses a local worker. After a compatible image model and runtime are installed, generation can operate offline. Image Search and locally saved references can help with prompts, but collecting references does not retrain the image model.
+
+The current image worker requires a compatible local model directory at `Models/Flux2`. The full model is very large and generally requires substantial GPU memory; low-memory systems with integrated graphics may not be able to run it at a practical speed. Do not assume that a 6.3 GB physical-memory system can run the full model.
+
+## Storage
+
+- The installer writes the application and its managed data to the selected MiniAI install location, except that the current Windows C: path resolver uses the current user's Local AppData directory.
+- Fresh Install removes MiniAI-managed models, runtime files, conversations, and learned data under the selected install folder.
+- Do not choose a folder that contains unrelated files.
 
 ## Build
-The repository now includes a Windows x64 build workflow. You can also build with a Windows Go toolchain using `go build -o MiniAI.exe .`. Test in a separate directory and back up existing MiniAI data before trying a development build.
+
+The repository's Windows workflow builds the application and packages a single-file CMD installer artifact. Each generated artifact must pass a clean-install test on Windows before being treated as a public release.
