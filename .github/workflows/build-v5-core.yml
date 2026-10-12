@@ -1,0 +1,77 @@
+name: Prepare MiniAI v5 core asset
+
+on:
+  push:
+    branches:
+      - miniai-v5.0.0-core-assets
+    paths:
+      - '.github/workflows/build-v5-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-core:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the v5 asset branch
+        uses: actions/checkout@v4
+        with:
+          ref: miniai-v5.0.0-core-assets
+          fetch-depth: 0
+
+      - name: Extract the existing MiniAI core into a separately versioned v5 asset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourcePath = Join-Path $PWD 'MiniAI_Installer_v4.11.0.cmd'
+          if (!(Test-Path -LiteralPath $sourcePath)) {
+            throw 'The repository baseline installer was not found; refusing to publish an empty core.'
+          }
+
+          $source = [IO.File]::ReadAllText($sourcePath)
+          $beginMarker = '::MINIAI_PAYLOAD_BEGIN'
+          $endMarker = '::MINIAI_PAYLOAD_END'
+          $begin = $source.IndexOf($beginMarker, [StringComparison]::Ordinal)
+          $end = $source.IndexOf($endMarker, [StringComparison]::Ordinal)
+          if ($begin -lt 0 -or $end -le $begin) {
+            throw 'The embedded baseline payload markers were not found.'
+          }
+
+          $payloadStart = $begin + $beginMarker.Length
+          $payload = $source.Substring($payloadStart, $end - $payloadStart) -replace '\\s', ''
+          $zipBytes = [Convert]::FromBase64String($payload)
+          $zipPath = Join-Path $env:RUNNER_TEMP 'miniai-payload.zip'
+          [IO.File]::WriteAllBytes($zipPath, $zipBytes)
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entry = $archive.GetEntry('MiniAI.exe')
+            if ($null -eq $entry -or $entry.Length -lt 1000000) {
+              throw 'The expected MiniAI core executable was not present or was unexpectedly small.'
+            }
+            $target = Join-Path $PWD 'MiniAI_Core_v5.exe'
+            $inputStream = $entry.Open()
+            try {
+              $outputStream = [IO.File]::Create($target)
+              try { $inputStream.CopyTo($outputStream) } finally { $outputStream.Dispose() }
+            } finally { $inputStream.Dispose() }
+          } finally {
+            $archive.Dispose()
+          }
+
+          $hash = (Get-FileHash -LiteralPath (Join-Path $PWD 'MiniAI_Core_v5.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $PWD 'MiniAI_Core_v5.sha256') -Value "$hash  MiniAI_Core_v5.exe" -Encoding ascii
+          Write-Host "Prepared MiniAI_Core_v5.exe ($((Get-Item 'MiniAI_Core_v5.exe').Length) bytes), SHA256 $hash"
+
+      - name: Commit the verified core asset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- MiniAI_Core_v5.exe MiniAI_Core_v5.sha256
+          git commit -m 'Prepare MiniAI v5 core runtime asset'
+          git push origin miniai-v5.0.0-core-assets
