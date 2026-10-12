@@ -45,6 +45,9 @@ $status.Text = 'Ready'; $status.Location = '38,310'; $status.Size = '650,24'; $s
 $form.Controls.Add($status)
 $details = New-Object Windows.Forms.Button
 $details.Text = 'More Details'; $details.Location = '38,365'; $details.Size = '115,35'; $details.FlatStyle = 'Flat'; $details.BackColor = [Drawing.Color]::FromArgb(20,25,34); $details.ForeColor = [Drawing.Color]::White; $form.Controls.Add($details)
+$script:FreshInstallRequested = $false
+$fresh = New-Object Windows.Forms.Button
+$fresh.Text = 'Fresh Install'; $fresh.Location = '170,365'; $fresh.Size = '125,35'; $fresh.FlatStyle = 'Flat'; $fresh.BackColor = [Drawing.Color]::FromArgb(25,65,115); $fresh.ForeColor = [Drawing.Color]::White; $form.Controls.Add($fresh)
 $install = New-Object Windows.Forms.Button
 $install.Text = 'Install MiniAI'; $install.Location = '570,365'; $install.Size = '118,35'; $install.FlatStyle = 'Flat'; $install.BackColor = [Drawing.Color]::FromArgb(35,105,220); $install.ForeColor = [Drawing.Color]::White; $form.Controls.Add($install)
 $thanks = New-Object Windows.Forms.Label
@@ -103,6 +106,11 @@ function Show-Details {
     Update-Details
 }
 $details.Add_Click({ Show-Details })
+$fresh.Add_Click({
+    if(-not $install.Enabled){return}
+    $answer=[Windows.Forms.MessageBox]::Show('Fresh Install removes the existing MiniAI model, runtime, conversations, and learned data inside the selected MiniAI folder. Continue?','Fresh Install',4,48)
+    if($answer -eq 'Yes'){$script:FreshInstallRequested=$true; $install.PerformClick()}
+})
 
 function Read-State {
     if(-not (Test-Path -LiteralPath $stateFile)){ Update-Details; return }
@@ -151,7 +159,7 @@ $install.Add_Click({
         if(-not(Test-Path -LiteralPath $worker)){throw "Installer worker is missing: $worker"}
         # Use a CMD wrapper only for stdout/stderr redirection. Paths are quoted normally; no PowerShell backtick escaping is used.
         $dq=[char]34
-        $workerCmdText='@echo off`r`n' + 'echo MiniAI worker wrapper started.' + "`r`n" + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File ' + $dq + $worker + $dq + ' -Requested ' + $dq + $requested + $dq + ' -ScriptRoot ' + $dq + $ScriptRoot + $dq + ' -StateFile ' + $dq + $stateFile + $dq + ' -LogFile ' + $dq + $logFile + $dq + ' 1>' + $dq + $stdoutFile + $dq + ' 2>' + $dq + $stderrFile + $dq + "`r`nexit /b %errorlevel%`r`n"
+        $workerCmdText='@echo off`r`n' + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File ' + $dq + $worker + $dq + ' -Requested ' + $dq + $requested + $dq + ' -ScriptRoot ' + $dq + $ScriptRoot + $dq + ' -StateFile ' + $dq + $stateFile + $dq + ' -LogFile ' + $dq + $logFile + $dq + $(if($script:FreshInstallRequested){' -FreshInstall'}else{''}) + ' 1>' + $dq + $stdoutFile + $dq + ' 2>' + $dq + $stderrFile + $dq + "`r`nexit /b %errorlevel%`r`n"
         # Convert the literal backslash-r/backslash-n markers above to actual CRLF only for the wrapper line.
         $workerCmdText=$workerCmdText.Replace('`r`n',"`r`n")
         Set-Content -LiteralPath $workerCmd -Value $workerCmdText -Encoding ASCII
