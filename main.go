@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// MiniAI v4.11.0: local-first, RAM-conscious assistant with a fully separate local Image AI pipeline.
+// MiniAI v5.0.0: local-first assistant with integrated chat, image search, teaching, and image generation.
 // The user-facing product is MiniAI; llama.cpp/Qwen are internal implementation components.
 // Teaching is integrated into the app and stores lessons on disk rather than retraining weights.
 
