@@ -4,5 +4,4 @@ https://gofund.me/f97af895e
 
 Have a great day!
 
-Credits:
-...
+sites.google.com/view/kelphal
